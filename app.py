@@ -461,4 +461,3 @@ st.latex(r"\vec{F}_r = \vec{F}_{13} + \vec{F}_{23}")
 
 if equilibrio:
     st.success("✅ A partícula 3 está na **posição de equilíbrio** (Fᵣ = 0, com 2 algarismos significativos).")
-``
