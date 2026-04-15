@@ -74,6 +74,9 @@ st.write(
     "outras duas partículas carregadas **1** e **2**."
 )
 
+# ✅ (7) Desafio
+st.markdown("**Desafio: tente encontrar uma situação onde a partícula 3 está em equilíbrio)**")
+
 # ===================== Controles =====================
 
 st.header("Definições das Partículas")
@@ -83,7 +86,7 @@ col1, col2, col3 = st.columns(3)
 # Sliders de carga (µC)
 qmin_uC, qmax_uC, qstep_uC = -5.0, 5.0, 0.05
 
-# ✅ (1) Sliders de posição limitados de -10 a 10 m
+# Sliders de posição limitados
 xmin_slider, xmax_slider = -10.0, 10.0
 
 with col1:
@@ -113,14 +116,16 @@ if len({x1, x2, x3}) < 3:
 
 K = 9.0e9
 
-F13, r13 = coulomb_force_1d(q3, q1, x3, x1, K=K)  # força em 3 devido a 1
-F23, r23 = coulomb_force_1d(q3, q2, x3, x2, K=K)  # força em 3 devido a 2
-Fr = F13 + F23
+# Forças "reais" (não arredondadas)
+F13_raw, r13 = coulomb_force_1d(q3, q1, x3, x1, K=K)
+F23_raw, r23 = coulomb_force_1d(q3, q2, x3, x2, K=K)
 
-# Duas casas significativas
-F13s = sig(F13, 2)
-F23s = sig(F23, 2)
-Frs  = sig(Fr, 2)
+# ✅ (3) Arredonda F13 e F23 para 2 AS e SÓ ENTÃO soma para Fr
+F13s = sig(F13_raw, 2)
+F23s = sig(F23_raw, 2)
+Frs  = sig(F13s + F23s, 2)
+
+# Distâncias (mantidas como antes, 2 AS para exibição)
 r13s = sig(r13, 2)
 r23s = sig(r23, 2)
 
@@ -131,30 +136,31 @@ equilibrio = (Frs == 0.0)
 xMin = -15.0
 xMax =  15.0
 
-# ✅ (5) ticks de 2 em 2 metros
-ticks = [t for t in range(-15, 16, 2)]
+# ✅ (1) (2) ticks de 1 em 1 metro, incluindo 0 garantido
+ticks = list(range(-15, 16, 1))  # inclui 0
 
-# ===================== Escala dos vetores =====================
+# ===================== Escala dos vetores (usando valores ARREDONDADOS) =====================
 
-maxF = max(abs(F13), abs(F23), abs(Fr), 1e-30)
-L13 = 120 * abs(F13) / maxF
-L23 = 120 * abs(F23) / maxF
-Lr  = 140 * abs(Fr)  / maxF
+# ✅ escala e direções usando as forças arredondadas (para coerência com equilíbrio)
+maxF = max(abs(F13s), abs(F23s), abs(Frs), 1e-30)
+L13 = 120 * abs(F13s) / maxF
+L23 = 120 * abs(F23s) / maxF
+Lr  = 140 * abs(Frs)  / maxF
 
-d13 = 0 if math.isclose(F13, 0.0, abs_tol=0.0) else (1 if F13 > 0 else -1)
-d23 = 0 if math.isclose(F23, 0.0, abs_tol=0.0) else (1 if F23 > 0 else -1)
-dr  = 0 if math.isclose(Fr,  0.0, abs_tol=0.0) else (1 if Fr  > 0 else -1)
+d13 = 0 if math.isclose(F13s, 0.0, abs_tol=0.0) else (1 if F13s > 0 else -1)
+d23 = 0 if math.isclose(F23s, 0.0, abs_tol=0.0) else (1 if F23s > 0 else -1)
+dr  = 0 if math.isclose(Frs,  0.0, abs_tol=0.0) else (1 if Frs  > 0 else -1)
 
 # ===================== Figura (Canvas) =====================
 
-st.header("Figura – Sistema Unidimensional (eixo fixo de -15 a 15)")
+st.header("Figura – Sistema Unidimensional")
 
 q1_str = br_sci_text(q1, 2, "C")
 q2_str = br_sci_text(q2, 2, "C")
 q3_str = br_sci_text(q3, 2, "C")
 
 html = f"""
-<canvas id="canvas" width="1000" height="390" style="background: white; border: 1px solid #eee;"></canvas>
+<canvas id="canvas" width="1000" height="410" style="background: white; border: 1px solid #eee;"></canvas>
 
 <script>
 const canvas = document.getElementById("canvas");
@@ -180,7 +186,7 @@ function X(x) {{
 }}
 
 // eixo em posição que deixa espaço para vetores em cima e cargas embaixo
-const yAxis = 220;
+const yAxis = 235;
 
 // ---------- Eixo ----------
 function drawAxis() {{
@@ -194,7 +200,7 @@ function drawAxis() {{
   // ticks
   const ticks = {ticks};
   ctx.fillStyle = "#111";
-  ctx.font = "14px Arial";
+  ctx.font = "13px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
 
@@ -205,6 +211,7 @@ function drawAxis() {{
     ctx.lineTo(px, yAxis + 7);
     ctx.stroke();
 
+    // rótulo com vírgula decimal (aqui inteiro)
     const label = t.toString().replace(".", ",");
     ctx.fillText(label, px, yAxis + 10);
   }});
@@ -217,7 +224,7 @@ function drawAxis() {{
 
 // ---------- Cor da borda pela carga ----------
 function borderColorByCharge(q) {{
-  const eps = 1e-15; // limiar para "neutro"
+  const eps = 1e-15;
   if (q > eps) return "#d62728";  // vermelho (positivo)
   if (q < -eps) return "#1f77b4"; // azul (negativo)
   return "#111";                  // preto (neutro)
@@ -228,7 +235,6 @@ function drawParticle(x, n, qText, qValue) {{
   const px = X(x);
   const py = yAxis;
 
-  // círculo
   ctx.fillStyle = "#f7f7f7";
   ctx.strokeStyle = borderColorByCharge(qValue);
   ctx.lineWidth = 3;
@@ -237,7 +243,6 @@ function drawParticle(x, n, qText, qValue) {{
   ctx.fill();
   ctx.stroke();
 
-  // número dentro
   ctx.fillStyle = "#111";
   ctx.font = "bold 16px Arial";
   ctx.textAlign = "center";
@@ -247,13 +252,13 @@ function drawParticle(x, n, qText, qValue) {{
   return {{px, py, n, qText}};
 }}
 
-// ✅ (4) Cargas abaixo do eixo (sem sobrepor vetores)
+// Cargas abaixo do eixo
 function drawChargeLabelsBelow(particles) {{
   particles.sort((a,b) => a.px - b.px);
 
-  const baseY = yAxis + 62;   // bem abaixo de ticks (que estão em yAxis+10)
+  const baseY = yAxis + 62;
   const dy = 16;
-  const minDx = 140;          // distância mínima entre legendas para evitar sobreposição
+  const minDx = 140;
   const levels = [];
 
   for (let i=0; i<particles.length; i++) {{
@@ -262,7 +267,7 @@ function drawChargeLabelsBelow(particles) {{
       const close = Math.abs(particles[i].px - particles[j].px) < minDx;
       if (close && levels[j] === level) {{
         level++;
-        j = i; // reinicia
+        j = i;
       }}
     }}
     levels.push(level);
@@ -280,7 +285,6 @@ function drawChargeLabelsBelow(particles) {{
     const level = levels[i];
     const y = baseY + level*dy;
 
-    // linha guia opcional
     if (level > 0) {{
       ctx.strokeStyle = "#999";
       ctx.lineWidth = 1;
@@ -294,7 +298,7 @@ function drawChargeLabelsBelow(particles) {{
   }}
 }}
 
-// ✅ (3) & (5) Vetor nas legendas: desenha uma setinha acima do texto do rótulo
+// Seta "de vetor" acima do texto do rótulo
 function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
   ctx.save();
   ctx.font = "14px Arial";
@@ -307,13 +311,12 @@ function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
   if (align === "right") xLeft = xAnchor - w;
   if (align === "center") xLeft = xAnchor - w/2;
 
-  const yArrow = yBaseline - 16; // acima do texto
+  const yArrow = yBaseline - 16;
   ctx.beginPath();
   ctx.moveTo(xLeft, yArrow);
   ctx.lineTo(xLeft + w, yArrow);
   ctx.stroke();
 
-  // cabeça da seta (sempre para a direita, só para indicar "vetor")
   ctx.beginPath();
   ctx.moveTo(xLeft + w, yArrow);
   ctx.lineTo(xLeft + w - 6, yArrow - 4);
@@ -324,7 +327,7 @@ function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
   ctx.restore();
 }}
 
-// ---------- Seta do vetor ----------
+// Vetor (seta)
 function drawArrow(x0, y0, dx, color, label) {{
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
@@ -341,20 +344,17 @@ function drawArrow(x0, y0, dx, color, label) {{
     ctx.textBaseline = "middle";
     ctx.fillText(label + " ≈ 0", x0 + 12, y0);
 
-    // vetor sobre o label também
     drawVectorOverLabel(label, x0 + 12, y0, "left", color);
     return;
   }}
 
   const x1 = x0 + dx;
 
-  // corpo
   ctx.beginPath();
   ctx.moveTo(x0, y0);
   ctx.lineTo(x1, y0);
   ctx.stroke();
 
-  // cabeça
   const head = 10;
   const s = (dx > 0) ? 1 : -1;
   ctx.beginPath();
@@ -364,7 +364,6 @@ function drawArrow(x0, y0, dx, color, label) {{
   ctx.closePath();
   ctx.fill();
 
-  // rótulo
   ctx.font = "14px Arial";
   const align = (dx > 0) ? "left" : "right";
   ctx.textAlign = align;
@@ -373,7 +372,6 @@ function drawArrow(x0, y0, dx, color, label) {{
   const yText = y0 - 6;
   ctx.fillText(label, xText, yText);
 
-  // ✅ seta acima do rótulo (indicando vetor)
   drawVectorOverLabel(label, xText, yText, align, color);
 }}
 
@@ -385,31 +383,28 @@ parts.push(drawParticle({x1}, 1, "{q1_str}", {q1}));
 parts.push(drawParticle({x2}, 2, "{q2_str}", {q2}));
 parts.push(drawParticle({x3}, 3, "{q3_str}", {q3}));
 
-// ✅ cargas abaixo do eixo
 drawChargeLabelsBelow(parts);
 
-// Vetores na partícula 3 (em linhas separadas acima do eixo)
+// Vetores na partícula 3 (acima do eixo)
 const px3 = X({x3});
-drawArrow(px3, yAxis - 90, {d13} * {L13:.6f}, "#d62728", "F₁₃");
-drawArrow(px3, yAxis - 60, {d23} * {L23:.6f}, "#1f77b4", "F₂₃");
-drawArrow(px3, yAxis - 30, {dr}  * {Lr:.6f},  "#2ca02c", "Fᵣ");
+drawArrow(px3, yAxis - 95, {d13} * {L13:.6f}, "#d62728", "F₁₃");
+drawArrow(px3, yAxis - 65, {d23} * {L23:.6f}, "#1f77b4", "F₂₃");
+drawArrow(px3, yAxis - 35, {dr}  * {Lr:.6f},  "#2ca02c", "Fᵣ");
 </script>
 """
-components.html(html, height=410)
+components.html(html, height=430)
 
 # ===================== Seção Forças =====================
 
 st.header("Forças Eletrostáticas")
 
 st.latex(r"F = K\frac{|q_a q_b|}{r^2}")
-
-# ✅ (2) b como subíndice usando LaTeX inline no markdown
 st.markdown(
     "onde $q_a$ e $q_b$ são as cargas das partículas interagindo, $r$ é a distância entre elas e "
     "**K = 9,0×10⁹ N·m²/C²**."
 )
 
-st.caption(f"Constante de Coulomb: K = {br_sci_text(K, 2, 'N·m²/C²')}")
+# ✅ (4) removido o caption da constante de Coulomb
 
 # ===================== Resultados destacados =====================
 
@@ -426,7 +421,10 @@ def result_card(title, value, direction, color):
             box-shadow: 0 1px 6px rgba(0,0,0,0.06);
             margin-bottom: 10px;">
           <div style="font-size: 14px; color: #333; margin-bottom: 6px;"><b>{title}</b></div>
-          <div style="font-size: 22px; color: #111;"><b>{value}</b> <span style="font-size: 20px;">{direction}</span></div>
+          <div style="font-size: 24px; color: #111;"><b>{value}</b> <span style="font-size: 22px;">{direction}</span></div>
+          <div style="font-size: 12px; color: #555; margin-top: 6px;">
+            Valores arredondados para <b>2 algarismos significativos</b>.
+          </div>
         </div>
         """,
         unsafe_allow_html=True
@@ -445,13 +443,14 @@ with c3:
 st.subheader("Cálculos")
 
 st.markdown("**Força na partícula 3 devido à partícula 1 (F₁₃)**")
-st.latex(r"F_{13} = K\frac{|q_1 q_3|}{r_{13}^2} \;\;\; \text{(módulo)}")
+# ✅ (5) removido "(módulo)"
+st.latex(r"F_{13} = K\frac{|q_1 q_3|}{r_{13}^2}")
 st.latex(
     rf"F_{{13}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_sci(q1,2)})({latex_sci(q3,2)})\right|}}{{({str(r13s).replace('.', '{,}')} )^2}}"
 )
 
 st.markdown("**Força na partícula 3 devido à partícula 2 (F₂₃)**")
-st.latex(r"F_{23} = K\frac{|q_2 q_3|}{r_{23}^2} \;\;\; \text{(módulo)}")
+st.latex(r"F_{23} = K\frac{|q_2 q_3|}{r_{23}^2}")
 st.latex(
     rf"F_{{23}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_sci(q2,2)})({latex_sci(q3,2)})\right|}}{{({str(r23s).replace('.', '{,}')} )^2}}"
 )
