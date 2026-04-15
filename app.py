@@ -104,7 +104,7 @@ st.write(
     "outras duas partículas carregadas **1** e **2**."
 )
 
-st.markdown("**Desafio: tente encontrar uma situação onde a partícula 3 está em equilíbrio)**")
+st.markdown("**Desafio: tente encontrar uma situação onde a partícula 3 está em equilíbrio ou quase em equilíbrio (Fr ~ 0).**")
 
 # ===================== Controles =====================
 
@@ -415,7 +415,7 @@ st.header("Forças Eletrostáticas")
 st.latex(r"F = K\frac{|q_a q_b|}{r^2}")
 st.markdown(
     "onde $q_a$ e $q_b$ são as cargas das partículas interagindo, $r$ é a distância entre elas e "
-    "**K = 9,0×10⁹ N·m²/C²**."
+    "**K é a constante de Coulomb igual a 9,0×10⁹ N·m²/C²**."
 )
 
 # ===================== Resultados destacados =====================
@@ -471,18 +471,15 @@ st.latex(r"F_{13} = K\frac{|q_1 q_3|}{r_{13}^2}")
 st.latex(
     rf"F_{{13}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_charge_C_from_uC(q1_uC)})({latex_charge_C_from_uC(q3_uC)})\right|}}{{({latex_dist_from_positions(x3, x1)})^2}}"
 )
-st.markdown(f"**Valor exibido:** {br_sci_force_text(F13_disp, 2, 'N')}  {arrow_symbol(F13_disp)}")
 
 st.markdown("**Força na partícula 3 devido à partícula 2 (F₂₃)**")
 st.latex(r"F_{23} = K\frac{|q_2 q_3|}{r_{23}^2}")
 st.latex(
     rf"F_{{23}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_charge_C_from_uC(q2_uC)})({latex_charge_C_from_uC(q3_uC)})\right|}}{{({latex_dist_from_positions(x3, x2)})^2}}"
 )
-st.markdown(f"**Valor exibido:** {br_sci_force_text(F23_disp, 2, 'N')}  {arrow_symbol(F23_disp)}")
 
 st.markdown("**Força Resultante na partícula 3**")
 st.latex(r"\vec{F}_r = \vec{F}_{13} + \vec{F}_{23}")
-st.markdown(f"**Valor exibido:** {br_sci_force_text(Fr_disp, 2, 'N')}  {arrow_symbol(Fr_disp)}")
 
 if equilibrio:
     st.success("✅ A partícula 3 está na **posição de equilíbrio** (Fᵣ = 0, com 2 algarismos significativos).")
