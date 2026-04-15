@@ -97,7 +97,7 @@ def br_charge_canvas_from_uC(q_uC: float) -> str:
 
 # ===================== Cabeçalho =====================
 
-st.image("logo_maua.png", width=180)
+st.image("logo_maua.png", use_container_width=True)
 st.title("Simulador Força Eletrostática Unidimensional")
 st.write(
     "Veja as forças aplicadas na partícula carregada **3** quando posicionada próxima a "
