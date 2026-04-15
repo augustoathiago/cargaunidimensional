@@ -16,10 +16,6 @@ def br_decimal(s: str) -> str:
     """Troca ponto por vírgula em uma string numérica."""
     return s.replace(".", ",")
 
-def br_float(x, nd=2):
-    """Formata número em notação decimal com vírgula, com nd casas."""
-    return br_decimal(f"{x:.{nd}f}")
-
 _sup_map = str.maketrans("0123456789-+", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺")
 
 def sci_parts(x, n=2):
@@ -29,7 +25,6 @@ def sci_parts(x, n=2):
     exp = int(math.floor(math.log10(abs(x))))
     mant = x / (10 ** exp)
     mant = float(f"{mant:.{n}g}")
-    # Ajuste se arredondamento virar 10
     if abs(mant) >= 10:
         mant /= 10
         exp += 1
@@ -70,26 +65,6 @@ def coulomb_force_1d(qi, qj, xi, xj, K=9e9):
     F = K * qi * qj * (r / (dist**3))
     return F, dist
 
-def nice_step(span):
-    """
-    Escolhe passo "bonito" para o eixo, baseado no span.
-    Retorna um valor em [0.1, 0.2, 0.5, 1, 2, 5, 10, ...]
-    """
-    if span <= 0:
-        return 1.0
-    raw = span / 8  # queremos ~8 marcações
-    p = 10 ** math.floor(math.log10(raw))
-    m = raw / p
-    if m < 1.5:
-        step = 1 * p
-    elif m < 3.5:
-        step = 2 * p
-    elif m < 7.5:
-        step = 5 * p
-    else:
-        step = 10 * p
-    return max(step, 0.1)
-
 # ===================== Cabeçalho =====================
 
 st.image("logo_maua.png", width=180)
@@ -108,8 +83,8 @@ col1, col2, col3 = st.columns(3)
 # Sliders de carga (µC)
 qmin_uC, qmax_uC, qstep_uC = -5.0, 5.0, 0.05
 
-# Ajuste: eixo fixo -15 a 15 => sliders coerentes com o eixo
-xmin_slider, xmax_slider = -15.0, 15.0
+# ✅ (1) Sliders de posição limitados de -10 a 10 m
+xmin_slider, xmax_slider = -10.0, 10.0
 
 with col1:
     st.subheader("Partícula 1")
@@ -142,7 +117,7 @@ F13, r13 = coulomb_force_1d(q3, q1, x3, x1, K=K)  # força em 3 devido a 1
 F23, r23 = coulomb_force_1d(q3, q2, x3, x2, K=K)  # força em 3 devido a 2
 Fr = F13 + F23
 
-# Duas casas significativas (para exibição e equilíbrio)
+# Duas casas significativas
 F13s = sig(F13, 2)
 F23s = sig(F23, 2)
 Frs  = sig(Fr, 2)
@@ -156,13 +131,8 @@ equilibrio = (Frs == 0.0)
 xMin = -15.0
 xMax =  15.0
 
-step = nice_step(xMax - xMin)  # span=30 => step típico 5
-t0 = math.floor(xMin / step) * step
-ticks = []
-t = t0
-while t <= xMax + 1e-9:
-    ticks.append(round(t, 10))
-    t += step
+# ✅ (5) ticks de 2 em 2 metros
+ticks = [t for t in range(-15, 16, 2)]
 
 # ===================== Escala dos vetores =====================
 
@@ -184,7 +154,7 @@ q2_str = br_sci_text(q2, 2, "C")
 q3_str = br_sci_text(q3, 2, "C")
 
 html = f"""
-<canvas id="canvas" width="1000" height="360" style="background: white; border: 1px solid #eee;"></canvas>
+<canvas id="canvas" width="1000" height="390" style="background: white; border: 1px solid #eee;"></canvas>
 
 <script>
 const canvas = document.getElementById("canvas");
@@ -209,7 +179,8 @@ function X(x) {{
   return padL + (x - xMin) * ((W - padL - padR) / (xMax - xMin));
 }}
 
-const yAxis = H/2 + 50;
+// eixo em posição que deixa espaço para vetores em cima e cargas embaixo
+const yAxis = 220;
 
 // ---------- Eixo ----------
 function drawAxis() {{
@@ -234,7 +205,7 @@ function drawAxis() {{
     ctx.lineTo(px, yAxis + 7);
     ctx.stroke();
 
-    const label = (Math.round(t*10)/10).toString().replace(".", ",");
+    const label = t.toString().replace(".", ",");
     ctx.fillText(label, px, yAxis + 10);
   }});
 
@@ -252,7 +223,7 @@ function borderColorByCharge(q) {{
   return "#111";                  // preto (neutro)
 }}
 
-// ---------- Partícula como círculo numerado ----------
+// ---------- Partícula ----------
 function drawParticle(x, n, qText, qValue) {{
   const px = X(x);
   const py = yAxis;
@@ -276,51 +247,46 @@ function drawParticle(x, n, qText, qValue) {{
   return {{px, py, n, qText}};
 }}
 
-// ---------- Desenha legendas das cargas SEM sobreposição ----------
-function drawChargeLabels(particles) {{
-  // Ordena por x (pixel)
+// ✅ (4) Cargas abaixo do eixo (sem sobrepor vetores)
+function drawChargeLabelsBelow(particles) {{
   particles.sort((a,b) => a.px - b.px);
 
-  const baseY = yAxis - 26;     // altura base (acima do círculo)
-  const dy = 16;                // deslocamento vertical por nível
-  const minDx = 120;            // distância mínima entre legendas para evitar sobreposição
-  const levels = [];            // guarda (px, level) por partícula na ordem
+  const baseY = yAxis + 62;   // bem abaixo de ticks (que estão em yAxis+10)
+  const dy = 16;
+  const minDx = 140;          // distância mínima entre legendas para evitar sobreposição
+  const levels = [];
 
-  // Define níveis (0,1,2...) para "empilhar" quando estiverem próximas
   for (let i=0; i<particles.length; i++) {{
     let level = 0;
     for (let j=i-1; j>=0; j--) {{
-      const prev = particles[j];
-      const prevLevel = levels[j];
-      const close = Math.abs(particles[i].px - prev.px) < minDx;
-      if (close && prevLevel === level) {{
+      const close = Math.abs(particles[i].px - particles[j].px) < minDx;
+      if (close && levels[j] === level) {{
         level++;
-        j = i; // reinicia busca (garante não colidir com outros níveis)
+        j = i; // reinicia
       }}
     }}
     levels.push(level);
   }}
 
-  // Renderiza texto com subscrito unicode: q₁, q₂, q₃
   const qSub = {{1: "q₁", 2:"q₂", 3:"q₃"}};
 
   ctx.fillStyle = "#111";
   ctx.font = "14px Arial";
   ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
+  ctx.textBaseline = "top";
 
   for (let i=0; i<particles.length; i++) {{
     const p = particles[i];
     const level = levels[i];
-    const y = baseY - level*dy;
+    const y = baseY + level*dy;
 
-    // pequena linha guia quando estiver muito alto (opcional, ajuda leitura)
+    // linha guia opcional
     if (level > 0) {{
       ctx.strokeStyle = "#999";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(p.px, yAxis - 18);
-      ctx.lineTo(p.px, y + 2);
+      ctx.moveTo(p.px, yAxis + 18);
+      ctx.lineTo(p.px, y - 2);
       ctx.stroke();
     }}
 
@@ -328,7 +294,37 @@ function drawChargeLabels(particles) {{
   }}
 }}
 
-// ---------- Seta ----------
+// ✅ (3) & (5) Vetor nas legendas: desenha uma setinha acima do texto do rótulo
+function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
+  ctx.save();
+  ctx.font = "14px Arial";
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+
+  const w = ctx.measureText(text).width;
+  let xLeft = xAnchor;
+  if (align === "right") xLeft = xAnchor - w;
+  if (align === "center") xLeft = xAnchor - w/2;
+
+  const yArrow = yBaseline - 16; // acima do texto
+  ctx.beginPath();
+  ctx.moveTo(xLeft, yArrow);
+  ctx.lineTo(xLeft + w, yArrow);
+  ctx.stroke();
+
+  // cabeça da seta (sempre para a direita, só para indicar "vetor")
+  ctx.beginPath();
+  ctx.moveTo(xLeft + w, yArrow);
+  ctx.lineTo(xLeft + w - 6, yArrow - 4);
+  ctx.lineTo(xLeft + w - 6, yArrow + 4);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}}
+
+// ---------- Seta do vetor ----------
 function drawArrow(x0, y0, dx, color, label) {{
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
@@ -344,16 +340,21 @@ function drawArrow(x0, y0, dx, color, label) {{
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillText(label + " ≈ 0", x0 + 12, y0);
+
+    // vetor sobre o label também
+    drawVectorOverLabel(label, x0 + 12, y0, "left", color);
     return;
   }}
 
   const x1 = x0 + dx;
 
+  // corpo
   ctx.beginPath();
   ctx.moveTo(x0, y0);
   ctx.lineTo(x1, y0);
   ctx.stroke();
 
+  // cabeça
   const head = 10;
   const s = (dx > 0) ? 1 : -1;
   ctx.beginPath();
@@ -363,10 +364,17 @@ function drawArrow(x0, y0, dx, color, label) {{
   ctx.closePath();
   ctx.fill();
 
+  // rótulo
   ctx.font = "14px Arial";
-  ctx.textAlign = (dx > 0) ? "left" : "right";
+  const align = (dx > 0) ? "left" : "right";
+  ctx.textAlign = align;
   ctx.textBaseline = "bottom";
-  ctx.fillText(label, x1 + (dx > 0 ? 6 : -6), y0 - 6);
+  const xText = x1 + (dx > 0 ? 6 : -6);
+  const yText = y0 - 6;
+  ctx.fillText(label, xText, yText);
+
+  // ✅ seta acima do rótulo (indicando vetor)
+  drawVectorOverLabel(label, xText, yText, align, color);
 }}
 
 drawAxis();
@@ -377,25 +385,27 @@ parts.push(drawParticle({x1}, 1, "{q1_str}", {q1}));
 parts.push(drawParticle({x2}, 2, "{q2_str}", {q2}));
 parts.push(drawParticle({x3}, 3, "{q3_str}", {q3}));
 
-// Legendas (sem sobreposição e com subíndice)
-drawChargeLabels(parts);
+// ✅ cargas abaixo do eixo
+drawChargeLabelsBelow(parts);
 
-// Vetores na partícula 3
+// Vetores na partícula 3 (em linhas separadas acima do eixo)
 const px3 = X({x3});
-drawArrow(px3, yAxis - 70, {d13} * {L13:.6f}, "#d62728", "F₁₃");
-drawArrow(px3, yAxis - 40, {d23} * {L23:.6f}, "#1f77b4", "F₂₃");
-drawArrow(px3, yAxis - 10, {dr}  * {Lr:.6f},  "#2ca02c", "Fᵣ");
+drawArrow(px3, yAxis - 90, {d13} * {L13:.6f}, "#d62728", "F₁₃");
+drawArrow(px3, yAxis - 60, {d23} * {L23:.6f}, "#1f77b4", "F₂₃");
+drawArrow(px3, yAxis - 30, {dr}  * {Lr:.6f},  "#2ca02c", "Fᵣ");
 </script>
 """
-components.html(html, height=390)
+components.html(html, height=410)
 
 # ===================== Seção Forças =====================
 
 st.header("Forças Eletrostáticas")
 
 st.latex(r"F = K\frac{|q_a q_b|}{r^2}")
-st.write(
-    "onde **qₐ** e **q_b** são as cargas das partículas interagindo, **r** é a distância entre elas e "
+
+# ✅ (2) b como subíndice usando LaTeX inline no markdown
+st.markdown(
+    "onde $q_a$ e $q_b$ são as cargas das partículas interagindo, $r$ é a distância entre elas e "
     "**K = 9,0×10⁹ N·m²/C²**."
 )
 
@@ -430,7 +440,8 @@ with c2:
 with c3:
     result_card("Força Resultante na partícula 3 (Fᵣ)", br_sci_text(Frs, 2, "N"), arrow_symbol(Frs), "#2ca02c")
 
-# --------- F13 detalhes ---------
+# ===================== Cálculos =====================
+
 st.subheader("Cálculos")
 
 st.markdown("**Força na partícula 3 devido à partícula 1 (F₁₃)**")
@@ -439,16 +450,15 @@ st.latex(
     rf"F_{{13}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_sci(q1,2)})({latex_sci(q3,2)})\right|}}{{({str(r13s).replace('.', '{,}')} )^2}}"
 )
 
-# --------- F23 detalhes ---------
 st.markdown("**Força na partícula 3 devido à partícula 2 (F₂₃)**")
 st.latex(r"F_{23} = K\frac{|q_2 q_3|}{r_{23}^2} \;\;\; \text{(módulo)}")
 st.latex(
     rf"F_{{23}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_sci(q2,2)})({latex_sci(q3,2)})\right|}}{{({str(r23s).replace('.', '{,}')} )^2}}"
 )
 
-# --------- Resultante (vetores) ---------
 st.markdown("**Força Resultante na partícula 3**")
 st.latex(r"\vec{F}_r = \vec{F}_{13} + \vec{F}_{23}")
 
 if equilibrio:
     st.success("✅ A partícula 3 está na **posição de equilíbrio** (Fᵣ = 0, com 2 algarismos significativos).")
+``
