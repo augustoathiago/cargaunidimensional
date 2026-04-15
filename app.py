@@ -211,4 +211,3 @@ with c3:
 
 if Frs == 0:
     st.success("✅ A partícula 3 está na **posição de equilíbrio**.")
-``
