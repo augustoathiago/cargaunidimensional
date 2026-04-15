@@ -97,7 +97,13 @@ def br_charge_canvas_from_uC(q_uC: float) -> str:
 
 # ===================== Cabeçalho =====================
 
-st.image("logo_maua.png", width=300)
+col_logo, col_title = st.columns([1, 5], vertical_alignment="center")
+with col_logo:
+    try:
+        st.image("logo_maua.png", use_container_width=True)
+    except Exception:
+        st.warning("Arquivo 'logo_maua.png' não encontrado na raiz do repositório.")
+with col_title:
 st.title("Simulador Força Eletrostática Unidimensional")
 st.write(
     "Veja as forças aplicadas na partícula carregada **3** quando posicionada próxima a "
