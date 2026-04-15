@@ -104,13 +104,13 @@ with col_logo:
     except Exception:
         st.warning("Arquivo 'logo_maua.png' não encontrado na raiz do repositório.")
 with col_title:
-st.title("Simulador Força Eletrostática Unidimensional")
-st.write(
-    "Veja as forças aplicadas na partícula carregada **3** quando posicionada próxima a "
-    "outras duas partículas carregadas **1** e **2**."
-)
+    st.title("Simulador Força Eletrostática Unidimensional")
+    st.write(
+        "Veja as forças aplicadas na partícula carregada **3** quando posicionada próxima a "
+        "outras duas partículas carregadas **1** e **2**."
+    )
 
-st.markdown("**Desafio: tente encontrar uma situação onde a partícula 3 está em equilíbrio ou quase em equilíbrio (Fr ~ 0).**")
+    st.markdown("**Desafio: tente encontrar uma situação onde a partícula 3 está em equilíbrio ou quase em equilíbrio (Fr ~ 0).**")
 
 # ===================== Controles =====================
 
