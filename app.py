@@ -30,23 +30,15 @@ def sci_parts(x, n=2):
         exp += 1
     return mant, exp
 
-def br_sci_text(x, n=2, unit=""):
-    """Notação científica em texto com vírgula: 2,0×10⁻⁶ N"""
+def br_sci_force_text(x, n=2, unit="N"):
+    """Forças em notação científica com vírgula e n algarismos significativos."""
     if x == 0:
         out = "0"
     else:
-        mant, exp = sci_parts(x, n)
+        mant, exp = sci_parts(x, n=n)
         mant_s = br_decimal(f"{mant:.{n}g}")
         out = f"{mant_s}×10{str(exp).translate(_sup_map)}"
-    return f"{out}{(' ' + unit) if unit else ''}"
-
-def latex_sci(x, n=2):
-    """Notação científica para LaTeX com vírgula decimal: 2{,}0\\times10^{-6}"""
-    if x == 0:
-        return "0"
-    mant, exp = sci_parts(x, n)
-    mant_s = f"{mant:.{n}g}".replace(".", "{,}")
-    return rf"{mant_s}\times10^{{{exp}}}"
+    return f"{out} {unit}".strip()
 
 def arrow_symbol(F, tol=0.0):
     """Seta indicando sentido no eixo x."""
@@ -65,6 +57,44 @@ def coulomb_force_1d(qi, qj, xi, xj, K=9e9):
     F = K * qi * qj * (r / (dist**3))
     return F, dist
 
+# ---------- Formatação "EXATA" como sliders ----------
+# Aqui a ideia é preservar a resolução do slider:
+# - cargas: 2 casas (µC)
+# - posições: 1 casa (m)
+# e evitar ruído binário (ex.: 3.999999999) usando round na mesma resolução.
+
+def fmt_uC_br(q_uC: float) -> str:
+    """Retorna a carga do slider em µC com 2 casas e vírgula."""
+    return f"{round(q_uC, 2):.2f}".replace(".", ",")
+
+def latex_charge_C_from_uC(q_uC: float) -> str:
+    """
+    Retorna LaTeX da carga em Coulomb, exibindo exatamente o valor do slider em µC (2 casas),
+    convertido para (mantissa × 10^{-6}) C.
+    Ex.: 2,35 µC -> 2{,}35\\times10^{-6}
+    """
+    if math.isclose(q_uC, 0.0, abs_tol=0.0):
+        return r"0"
+    mant = f"{round(q_uC, 2):.2f}".replace(".", "{,}")
+    return rf"{mant}\times10^{{-6}}"
+
+def fmt_pos_br(x: float) -> str:
+    """Retorna posição do slider com 1 casa e vírgula."""
+    return f"{round(x, 1):.1f}".replace(".", ",")
+
+def latex_dist_from_positions(xa: float, xb: float) -> str:
+    """Distância |xa-xb| exibida com 1 casa (mesma resolução do slider) em LaTeX."""
+    d = abs(round(xa, 1) - round(xb, 1))
+    return f"{d:.1f}".replace(".", "{,}")
+
+def br_charge_canvas_from_uC(q_uC: float) -> str:
+    """Texto para canvas: mostra q com 2 casas do slider em µC convertido para C em notação 10^-6."""
+    if math.isclose(q_uC, 0.0, abs_tol=0.0):
+        return "0 C"
+    mant_s = fmt_uC_br(q_uC)  # já com vírgula e 2 casas
+    exp = -6
+    return f"{mant_s}×10{str(exp).translate(_sup_map)} C"
+
 # ===================== Cabeçalho =====================
 
 st.image("logo_maua.png", width=180)
@@ -74,7 +104,6 @@ st.write(
     "outras duas partículas carregadas **1** e **2**."
 )
 
-# ✅ (7) Desafio
 st.markdown("**Desafio: tente encontrar uma situação onde a partícula 3 está em equilíbrio)**")
 
 # ===================== Controles =====================
@@ -86,7 +115,7 @@ col1, col2, col3 = st.columns(3)
 # Sliders de carga (µC)
 qmin_uC, qmax_uC, qstep_uC = -5.0, 5.0, 0.05
 
-# Sliders de posição limitados
+# Sliders de posição -10 a 10
 xmin_slider, xmax_slider = -10.0, 10.0
 
 with col1:
@@ -116,48 +145,42 @@ if len({x1, x2, x3}) < 3:
 
 K = 9.0e9
 
-# Forças "reais" (não arredondadas)
+# forças "reais" (sem arredondar q nem r)
 F13_raw, r13 = coulomb_force_1d(q3, q1, x3, x1, K=K)
 F23_raw, r23 = coulomb_force_1d(q3, q2, x3, x2, K=K)
 
-# ✅ (3) Arredonda F13 e F23 para 2 AS e SÓ ENTÃO soma para Fr
-F13s = sig(F13_raw, 2)
-F23s = sig(F23_raw, 2)
-Frs  = sig(F13s + F23s, 2)
+# ✅ Apenas forças finais exibidas arredondadas para 2 AS
+F13_disp = sig(F13_raw, 2)
+F23_disp = sig(F23_raw, 2)
 
-# Distâncias (mantidas como antes, 2 AS para exibição)
-r13s = sig(r13, 2)
-r23s = sig(r23, 2)
+# ✅ Equilíbrio didático: soma usando forças exibidas (já em 2 AS)
+Fr_disp = sig(F13_disp + F23_disp, 2)
+equilibrio = (Fr_disp == 0.0)
 
-equilibrio = (Frs == 0.0)
-
-# ===================== Eixo fixo (-15 a 15) =====================
+# ===================== Eixo e ticks (1 em 1, inclui 0) =====================
 
 xMin = -15.0
 xMax =  15.0
-
-# ✅ (1) (2) ticks de 1 em 1 metro, incluindo 0 garantido
 ticks = list(range(-15, 16, 1))  # inclui 0
 
-# ===================== Escala dos vetores (usando valores ARREDONDADOS) =====================
+# ===================== Escala dos vetores (com forças exibidas) =====================
 
-# ✅ escala e direções usando as forças arredondadas (para coerência com equilíbrio)
-maxF = max(abs(F13s), abs(F23s), abs(Frs), 1e-30)
-L13 = 120 * abs(F13s) / maxF
-L23 = 120 * abs(F23s) / maxF
-Lr  = 140 * abs(Frs)  / maxF
+maxF = max(abs(F13_disp), abs(F23_disp), abs(Fr_disp), 1e-30)
+L13 = 120 * abs(F13_disp) / maxF
+L23 = 120 * abs(F23_disp) / maxF
+Lr  = 140 * abs(Fr_disp)  / maxF
 
-d13 = 0 if math.isclose(F13s, 0.0, abs_tol=0.0) else (1 if F13s > 0 else -1)
-d23 = 0 if math.isclose(F23s, 0.0, abs_tol=0.0) else (1 if F23s > 0 else -1)
-dr  = 0 if math.isclose(Frs,  0.0, abs_tol=0.0) else (1 if Frs  > 0 else -1)
+d13 = 0 if math.isclose(F13_disp, 0.0, abs_tol=0.0) else (1 if F13_disp > 0 else -1)
+d23 = 0 if math.isclose(F23_disp, 0.0, abs_tol=0.0) else (1 if F23_disp > 0 else -1)
+dr  = 0 if math.isclose(Fr_disp,  0.0, abs_tol=0.0) else (1 if Fr_disp  > 0 else -1)
 
 # ===================== Figura (Canvas) =====================
 
 st.header("Figura – Sistema Unidimensional")
 
-q1_str = br_sci_text(q1, 2, "C")
-q2_str = br_sci_text(q2, 2, "C")
-q3_str = br_sci_text(q3, 2, "C")
+q1_str = br_charge_canvas_from_uC(q1_uC)
+q2_str = br_charge_canvas_from_uC(q2_uC)
+q3_str = br_charge_canvas_from_uC(q3_uC)
 
 html = f"""
 <canvas id="canvas" width="1000" height="410" style="background: white; border: 1px solid #eee;"></canvas>
@@ -169,15 +192,12 @@ const ctx = canvas.getContext("2d");
 const W = canvas.width;
 const H = canvas.height;
 
-// fundo branco
 ctx.fillStyle = "white";
 ctx.fillRect(0, 0, W, H);
 
-// intervalo FIXO do eixo
 const xMin = {xMin};
 const xMax = {xMax};
 
-// margens em pixels
 const padL = 50;
 const padR = 50;
 
@@ -185,7 +205,6 @@ function X(x) {{
   return padL + (x - xMin) * ((W - padL - padR) / (xMax - xMin));
 }}
 
-// eixo em posição que deixa espaço para vetores em cima e cargas embaixo
 const yAxis = 235;
 
 // ---------- Eixo ----------
@@ -197,7 +216,6 @@ function drawAxis() {{
   ctx.lineTo(W - padR, yAxis);
   ctx.stroke();
 
-  // ticks
   const ticks = {ticks};
   ctx.fillStyle = "#111";
   ctx.font = "13px Arial";
@@ -211,12 +229,10 @@ function drawAxis() {{
     ctx.lineTo(px, yAxis + 7);
     ctx.stroke();
 
-    // rótulo com vírgula decimal (aqui inteiro)
     const label = t.toString().replace(".", ",");
     ctx.fillText(label, px, yAxis + 10);
   }});
 
-  // unidade
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
   ctx.fillText("x (m)", W - padR, yAxis - 10);
@@ -225,9 +241,9 @@ function drawAxis() {{
 // ---------- Cor da borda pela carga ----------
 function borderColorByCharge(q) {{
   const eps = 1e-15;
-  if (q > eps) return "#d62728";  // vermelho (positivo)
-  if (q < -eps) return "#1f77b4"; // azul (negativo)
-  return "#111";                  // preto (neutro)
+  if (q > eps) return "#d62728";
+  if (q < -eps) return "#1f77b4";
+  return "#111";
 }}
 
 // ---------- Partícula ----------
@@ -377,7 +393,6 @@ function drawArrow(x0, y0, dx, color, label) {{
 
 drawAxis();
 
-// Partículas
 const parts = [];
 parts.push(drawParticle({x1}, 1, "{q1_str}", {q1}));
 parts.push(drawParticle({x2}, 2, "{q2_str}", {q2}));
@@ -385,7 +400,6 @@ parts.push(drawParticle({x3}, 3, "{q3_str}", {q3}));
 
 drawChargeLabelsBelow(parts);
 
-// Vetores na partícula 3 (acima do eixo)
 const px3 = X({x3});
 drawArrow(px3, yAxis - 95, {d13} * {L13:.6f}, "#d62728", "F₁₃");
 drawArrow(px3, yAxis - 65, {d23} * {L23:.6f}, "#1f77b4", "F₂₃");
@@ -404,8 +418,6 @@ st.markdown(
     "**K = 9,0×10⁹ N·m²/C²**."
 )
 
-# ✅ (4) removido o caption da constante de Coulomb
-
 # ===================== Resultados destacados =====================
 
 st.subheader("Resultados (sentido no eixo x)")
@@ -423,7 +435,7 @@ def result_card(title, value, direction, color):
           <div style="font-size: 14px; color: #333; margin-bottom: 6px;"><b>{title}</b></div>
           <div style="font-size: 24px; color: #111;"><b>{value}</b> <span style="font-size: 22px;">{direction}</span></div>
           <div style="font-size: 12px; color: #555; margin-top: 6px;">
-            Valores arredondados para <b>2 algarismos significativos</b>.
+            Apenas os <b>resultados finais</b> são exibidos com <b>2 algarismos significativos</b>.
           </div>
         </div>
         """,
@@ -432,31 +444,45 @@ def result_card(title, value, direction, color):
 
 c1, c2, c3 = st.columns(3)
 with c1:
-    result_card("Força na partícula 3 devido à partícula 1 (F₁₃)", br_sci_text(F13s, 2, "N"), arrow_symbol(F13s), "#d62728")
+    result_card("Força na partícula 3 devido à partícula 1 (F₁₃)",
+                br_sci_force_text(F13_disp, 2, "N"),
+                arrow_symbol(F13_disp),
+                "#d62728")
 with c2:
-    result_card("Força na partícula 3 devido à partícula 2 (F₂₃)", br_sci_text(F23s, 2, "N"), arrow_symbol(F23s), "#1f77b4")
+    result_card("Força na partícula 3 devido à partícula 2 (F₂₃)",
+                br_sci_force_text(F23_disp, 2, "N"),
+                arrow_symbol(F23_disp),
+                "#1f77b4")
 with c3:
-    result_card("Força Resultante na partícula 3 (Fᵣ)", br_sci_text(Frs, 2, "N"), arrow_symbol(Frs), "#2ca02c")
+    result_card("Força Resultante na partícula 3 (Fᵣ)",
+                br_sci_force_text(Fr_disp, 2, "N"),
+                arrow_symbol(Fr_disp),
+                "#2ca02c")
 
 # ===================== Cálculos =====================
 
 st.subheader("Cálculos")
 
+# Equações: mostrar q e r com os valores EXATOS dos sliders (resolução do slider),
+# sem "sig()" aqui. Somente o valor final da força exibida é 2 AS.
+
 st.markdown("**Força na partícula 3 devido à partícula 1 (F₁₃)**")
-# ✅ (5) removido "(módulo)"
 st.latex(r"F_{13} = K\frac{|q_1 q_3|}{r_{13}^2}")
 st.latex(
-    rf"F_{{13}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_sci(q1,2)})({latex_sci(q3,2)})\right|}}{{({str(r13s).replace('.', '{,}')} )^2}}"
+    rf"F_{{13}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_charge_C_from_uC(q1_uC)})({latex_charge_C_from_uC(q3_uC)})\right|}}{{({latex_dist_from_positions(x3, x1)})^2}}"
 )
+st.markdown(f"**Valor exibido:** {br_sci_force_text(F13_disp, 2, 'N')}  {arrow_symbol(F13_disp)}")
 
 st.markdown("**Força na partícula 3 devido à partícula 2 (F₂₃)**")
 st.latex(r"F_{23} = K\frac{|q_2 q_3|}{r_{23}^2}")
 st.latex(
-    rf"F_{{23}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_sci(q2,2)})({latex_sci(q3,2)})\right|}}{{({str(r23s).replace('.', '{,}')} )^2}}"
+    rf"F_{{23}} = (9{{,}}0\times10^9)\cdot \frac{{\left|({latex_charge_C_from_uC(q2_uC)})({latex_charge_C_from_uC(q3_uC)})\right|}}{{({latex_dist_from_positions(x3, x2)})^2}}"
 )
+st.markdown(f"**Valor exibido:** {br_sci_force_text(F23_disp, 2, 'N')}  {arrow_symbol(F23_disp)}")
 
 st.markdown("**Força Resultante na partícula 3**")
 st.latex(r"\vec{F}_r = \vec{F}_{13} + \vec{F}_{23}")
+st.markdown(f"**Valor exibido:** {br_sci_force_text(Fr_disp, 2, 'N')}  {arrow_symbol(Fr_disp)}")
 
 if equilibrio:
     st.success("✅ A partícula 3 está na **posição de equilíbrio** (Fᵣ = 0, com 2 algarismos significativos).")
