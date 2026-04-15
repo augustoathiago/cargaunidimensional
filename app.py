@@ -267,4 +267,3 @@ if equilibrio:
     st.success("✅ A partícula 3 está na **posição de equilíbrio** (Fᵣ = 0, com 2 algarismos significativos).")
 else:
     st.info("Ajuste a posição **x3** para buscar a condição de equilíbrio (Fᵣ ≈ 0).")
-``
