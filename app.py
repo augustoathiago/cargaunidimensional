@@ -1,45 +1,11 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import math
-import json
 
 st.set_page_config(page_title="Simulador Força Eletrostática", layout="wide")
 
-# ===================== CSS (Mobile First) =====================
-st.markdown(
-    """
-    <style>
-      /* reduz padding geral no mobile */
-      @media (max-width: 640px) {
-        .block-container { padding-left: 0.9rem !important; padding-right: 0.9rem !important; }
-        h1 { font-size: 1.55rem !important; }
-        h2 { font-size: 1.25rem !important; }
-        h3 { font-size: 1.10rem !important; }
-      }
-
-      /* força colunas a empilharem no mobile (sliders/resultados) */
-      @media (max-width: 640px) {
-        div[data-testid="column"] {
-          width: 100% !important;
-          flex: 1 1 100% !important;
-          min-width: 100% !important;
-        }
-      }
-
-      /* melhora visual de cards no mobile */
-      .result-card-title { font-size: 14px; color: #333; margin-bottom: 6px; }
-      .result-card-value { font-size: 24px; color: #111; }
-      .result-card-foot  { font-size: 12px; color: #555; margin-top: 6px; }
-
-      @media (max-width: 640px) {
-        .result-card-value { font-size: 20px !important; }
-      }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 # ===================== Helpers =====================
+
 def sig(x, n=2):
     """Retorna x com n algarismos significativos (float)."""
     if x == 0 or math.isclose(x, 0.0, abs_tol=0.0):
@@ -88,52 +54,67 @@ def coulomb_force_1d(qi, qj, xi, xj, K=9e9):
     """
     r = xi - xj
     dist = abs(r)
-    if dist == 0:
-        return float("nan"), 0.0
     F = K * qi * qj * (r / (dist**3))
     return F, dist
 
 # ---------- Formatação "EXATA" como sliders ----------
+# - cargas: 2 casas (µC)
+# - posições: 1 casa (m)
+
 def fmt_uC_br(q_uC: float) -> str:
+    """Retorna a carga do slider em µC com 2 casas e vírgula."""
     return f"{round(q_uC, 2):.2f}".replace(".", ",")
 
 def latex_charge_C_from_uC(q_uC: float) -> str:
+    """
+    Retorna LaTeX da carga em Coulomb, exibindo exatamente o valor do slider em µC (2 casas),
+    convertido para (mantissa × 10^{-6}) C.
+    Ex.: 2,35 µC -> 2{,}35\\times10^{-6}
+    """
     if math.isclose(q_uC, 0.0, abs_tol=0.0):
         return r"0"
     mant = f"{round(q_uC, 2):.2f}".replace(".", "{,}")
     return rf"{mant}\times10^{{-6}}"
 
+def fmt_pos_br(x: float) -> str:
+    """Retorna posição do slider com 1 casa e vírgula."""
+    return f"{round(x, 1):.1f}".replace(".", ",")
+
 def latex_dist_from_positions(xa: float, xb: float) -> str:
+    """Distância |xa-xb| exibida com 1 casa (mesma resolução do slider) em LaTeX."""
     d = abs(round(xa, 1) - round(xb, 1))
     return f"{d:.1f}".replace(".", "{,}")
 
 def br_charge_canvas_from_uC(q_uC: float) -> str:
+    """Texto para canvas: mostra q com 2 casas do slider em µC convertido para C em notação 10^-6."""
     if math.isclose(q_uC, 0.0, abs_tol=0.0):
         return "0 C"
-    mant_s = fmt_uC_br(q_uC)
+    mant_s = fmt_uC_br(q_uC)  # já com vírgula e 2 casas
     exp = -6
     return f"{mant_s}×10{str(exp).translate(_sup_map)} C"
 
 # ===================== Cabeçalho =====================
+
 col_logo, col_title = st.columns([1, 5], vertical_alignment="center")
 with col_logo:
     try:
         st.image("logo_maua.png", use_container_width=True)
     except Exception:
         st.warning("Arquivo 'logo_maua.png' não encontrado na raiz do repositório.")
-
 with col_title:
     st.title("Simulador Força Eletrostática Unidimensional")
     st.write(
         "Veja as forças aplicadas na partícula carregada **3** quando posicionada próxima a "
         "outras duas partículas carregadas **1** e **2**."
     )
-    st.markdown(
-        "**Desafio:** tente encontrar uma situação onde a partícula 3 está em equilíbrio ou quase em equilíbrio (**Fᵣ ~ 0**)."
-    )
+
+    st.markdown("**Desafio: tente encontrar uma situação onde a partícula 3 está em equilíbrio ou quase em equilíbrio (Fr ~ 0).**")
 
 # ===================== Controles =====================
+
 st.header("Definições das Partículas")
+
+col1, col2, col3 = st.columns(3)
 
 # Sliders de carga (µC)
 qmin_uC, qmax_uC, qstep_uC = -5.0, 5.0, 0.05
@@ -141,22 +122,19 @@ qmin_uC, qmax_uC, qstep_uC = -5.0, 5.0, 0.05
 # Sliders de posição -10 a 10
 xmin_slider, xmax_slider = -10.0, 10.0
 
-# ✅ Melhor para mobile: controles em abas (evita 3 colunas apertadas)
-tab1, tab2, tab3 = st.tabs(["Partícula 1", "Partícula 2", "Partícula 3"])
-
-with tab1:
+with col1:
     st.subheader("Partícula 1")
     x1 = st.slider("Posição x₁ (m)", xmin_slider, xmax_slider, -4.0, 0.1, format="%.1f")
     q1_uC = st.slider("Carga q₁ (µC)", qmin_uC, qmax_uC, 2.0, qstep_uC, format="%.2f")
     q1 = q1_uC * 1e-6
 
-with tab2:
+with col2:
     st.subheader("Partícula 2")
     x2 = st.slider("Posição x₂ (m)", xmin_slider, xmax_slider, 4.0, 0.1, format="%.1f")
     q2_uC = st.slider("Carga q₂ (µC)", qmin_uC, qmax_uC, -2.0, qstep_uC, format="%.2f")
     q2 = q2_uC * 1e-6
 
-with tab3:
+with col3:
     st.subheader("Partícula 3")
     x3 = st.slider("Posição x₃ (m)", xmin_slider, xmax_slider, 0.0, 0.1, format="%.1f")
     q3_uC = st.slider("Carga q₃ (µC)", qmin_uC, qmax_uC, 1.0, qstep_uC, format="%.2f")
@@ -168,8 +146,10 @@ if len({x1, x2, x3}) < 3:
     st.stop()
 
 # ===================== Física =====================
+
 K = 9.0e9
 
+# forças "reais" (sem arredondar q nem r)
 F13_raw, r13 = coulomb_force_1d(q3, q1, x3, x1, K=K)
 F23_raw, r23 = coulomb_force_1d(q3, q2, x3, x2, K=K)
 
@@ -181,64 +161,145 @@ F23_disp = sig(F23_raw, 2)
 Fr_disp = sig(F13_disp + F23_disp, 2)
 equilibrio = (Fr_disp == 0.0)
 
-# ===================== Escala dos vetores (normalizada) =====================
+# ===================== Eixo e ticks (1 em 1, inclui 0) =====================
+
+xMin = -15.0
+xMax =  15.0
+ticks = list(range(-15, 16, 1))  # inclui 0
+
+# ===================== Escala dos vetores (com forças exibidas) =====================
+
 maxF = max(abs(F13_disp), abs(F23_disp), abs(Fr_disp), 1e-30)
-a13 = abs(F13_disp) / maxF
-a23 = abs(F23_disp) / maxF
-ar  = abs(Fr_disp)  / maxF
+L13 = 120 * abs(F13_disp) / maxF
+L23 = 120 * abs(F23_disp) / maxF
+Lr  = 140 * abs(Fr_disp)  / maxF
 
 d13 = 0 if math.isclose(F13_disp, 0.0, abs_tol=0.0) else (1 if F13_disp > 0 else -1)
 d23 = 0 if math.isclose(F23_disp, 0.0, abs_tol=0.0) else (1 if F23_disp > 0 else -1)
 dr  = 0 if math.isclose(Fr_disp,  0.0, abs_tol=0.0) else (1 if Fr_disp  > 0 else -1)
 
-# ===================== Figura (Canvas responsivo) =====================
+# ===================== Figura (Canvas) =====================
+
 st.header("Figura – Sistema Unidimensional")
 
 q1_str = br_charge_canvas_from_uC(q1_uC)
 q2_str = br_charge_canvas_from_uC(q2_uC)
 q3_str = br_charge_canvas_from_uC(q3_uC)
 
-# Dados para JS (evita problemas de aspas/acentos)
-payload = {
-    "xMin": -15.0,
-    "xMax":  15.0,
-    "x1": x1, "x2": x2, "x3": x3,
-    "q1": q1, "q2": q2, "q3": q3,
-    "q1_str": q1_str, "q2_str": q2_str, "q3_str": q3_str,
-    "d13": d13, "d23": d23, "dr": dr,
-    "a13": a13, "a23": a23, "ar": ar,
-}
-
 html = f"""
-<div id="wrap" style="width:100%; max-width:1100px; margin: 0 auto;">
-  <canvas id="canvas" style="
-      width:100%;
-      display:block;
-      background:white;
-      border:1px solid #eee;
-      border-radius: 14px;
-      box-shadow: 0 1px 10px rgba(0,0,0,0.05);
-  "></canvas>
-  <div style="font-size:12px; color:#666; margin-top:8px;">
-    Dica: no celular, a figura se adapta automaticamente à largura e redesenha ao girar a tela.
-  </div>
+<!-- ✅ ADIÇÃO: container com overflow-x + drag-to-scroll -->
+<div id="canvasWrap" style="
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    cursor: grab;
+    user-select: none;
+    touch-action: pan-x;
+">
+  <canvas id="canvas" width="1000" height="410"
+    style="background: white; border: 1px solid #eee; display: block;">
+  </canvas>
 </div>
 
 <script>
-const data = {json.dumps(payload, ensure_ascii=False)};
+/* ✅ ADIÇÃO: drag-to-scroll horizontal (touch e mouse) */
+const wrap = document.getElementById("canvasWrap");
+let isDown = false;
+let startX = 0;
+let startScrollLeft = 0;
+let activePointerId = null;
 
+wrap.addEventListener("pointerdown", (e) => {{
+  // No mouse, só o botão principal
+  if (e.pointerType === "mouse" && e.button !== 0) return;
+
+  isDown = true;
+  activePointerId = e.pointerId;
+  wrap.setPointerCapture(activePointerId);
+
+  startX = e.clientX;
+  startScrollLeft = wrap.scrollLeft;
+
+  wrap.style.cursor = "grabbing";
+}});
+
+wrap.addEventListener("pointermove", (e) => {{
+  if (!isDown) return;
+  if (activePointerId !== e.pointerId) return;
+
+  const dx = e.clientX - startX;
+  wrap.scrollLeft = startScrollLeft - dx;
+}});
+
+function endDrag(e) {{
+  if (activePointerId !== null && e.pointerId !== activePointerId) return;
+  isDown = false;
+  activePointerId = null;
+  wrap.style.cursor = "grab";
+}}
+
+wrap.addEventListener("pointerup", endDrag);
+wrap.addEventListener("pointercancel", endDrag);
+wrap.addEventListener("pointerleave", (e) => {{
+  // Evita “grudar” no desktop se sair da área
+  if (e.pointerType === "mouse") endDrag(e);
+}});
+
+/* ===================== Seu código original de desenho ===================== */
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-const BASE_W = 1000;
-const BASE_H = 410;
+const W = canvas.width;
+const H = canvas.height;
 
-function clamp(v, a, b) {{ return Math.max(a, Math.min(b, v)); }}
+ctx.fillStyle = "white";
+ctx.fillRect(0, 0, W, H);
 
-function Xmap(x, xMin, xMax, W, padL, padR) {{
+const xMin = {xMin};
+const xMax = {xMax};
+
+const padL = 50;
+const padR = 50;
+
+function X(x) {{
   return padL + (x - xMin) * ((W - padL - padR) / (xMax - xMin));
 }}
 
+const yAxis = 235;
+
+// ---------- Eixo ----------
+function drawAxis() {{
+  ctx.strokeStyle = "#111";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(padL, yAxis);
+  ctx.lineTo(W - padR, yAxis);
+  ctx.stroke();
+
+  const ticks = {ticks};
+  ctx.fillStyle = "#111";
+  ctx.font = "13px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+
+  ticks.forEach(t => {{
+    const px = X(t);
+    ctx.beginPath();
+    ctx.moveTo(px, yAxis - 7);
+    ctx.lineTo(px, yAxis + 7);
+    ctx.stroke();
+
+    const label = t.toString().replace(".", ",");
+    ctx.fillText(label, px, yAxis + 10);
+  }});
+
+  ctx.textAlign = "right";
+  ctx.textBaseline = "bottom";
+  ctx.fillText("x (m)", W - padR, yAxis - 10);
+}}
+
+// ---------- Cor da borda pela carga ----------
 function borderColorByCharge(q) {{
   const eps = 1e-15;
   if (q > eps) return "#d62728";
@@ -246,93 +307,21 @@ function borderColorByCharge(q) {{
   return "#111";
 }}
 
-function drawVectorOverLabel(text, xAnchor, yBaseline, align, color, fontPx) {{
-  ctx.save();
-  ctx.font = `${{fontPx}}px Arial`;
-  ctx.fillStyle = color;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
+// ---------- Partícula ----------
+function drawParticle(x, n, qText, qValue) {{
+  const px = X(x);
+  const py = yAxis;
 
-  const w = ctx.measureText(text).width;
-  let xLeft = xAnchor;
-  if (align === "right") xLeft = xAnchor - w;
-  if (align === "center") xLeft = xAnchor - w/2;
-
-  const yArrow = yBaseline - (fontPx + 2);
-  ctx.beginPath();
-  ctx.moveTo(xLeft, yArrow);
-  ctx.lineTo(xLeft + w, yArrow);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(xLeft + w, yArrow);
-  ctx.lineTo(xLeft + w - 6, yArrow - 4);
-  ctx.lineTo(xLeft + w - 6, yArrow + 4);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.restore();
-}}
-
-function drawArrow(x0, y0, dx, color, label, fontPx) {{
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 3;
-
-  if (dx === 0) {{
-    ctx.beginPath();
-    ctx.moveTo(x0 - 8, y0);
-    ctx.lineTo(x0 + 8, y0);
-    ctx.stroke();
-
-    ctx.font = `${{fontPx}}px Arial`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label + " ≈ 0", x0 + 12, y0);
-
-    drawVectorOverLabel(label, x0 + 12, y0, "left", color, fontPx);
-    return;
-  }}
-
-  const x1 = x0 + dx;
-
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y0);
-  ctx.stroke();
-
-  const head = 10;
-  const s = (dx > 0) ? 1 : -1;
-
-  ctx.beginPath();
-  ctx.moveTo(x1, y0);
-  ctx.lineTo(x1 - s*head, y0 - head*0.6);
-  ctx.lineTo(x1 - s*head, y0 + head*0.6);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.font = `${{fontPx}}px Arial`;
-  const align = (dx > 0) ? "left" : "right";
-  ctx.textAlign = align;
-  ctx.textBaseline = "bottom";
-  const xText = x1 + (dx > 0 ? 6 : -6);
-  const yText = y0 - 6;
-  ctx.fillText(label, xText, yText);
-
-  drawVectorOverLabel(label, xText, yText, align, color, fontPx);
-}}
-
-function drawParticle(px, py, n, qText, qValue, radiusPx, fontPx) {{
   ctx.fillStyle = "#f7f7f7";
   ctx.strokeStyle = borderColorByCharge(qValue);
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(px, py, radiusPx, 0, 2*Math.PI);
+  ctx.arc(px, py, 16, 0, 2*Math.PI);
   ctx.fill();
   ctx.stroke();
 
   ctx.fillStyle = "#111";
-  ctx.font = `bold ${{Math.round(fontPx*1.15)}}px Arial`;
+  ctx.font = "bold 16px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(n.toString(), px, py);
@@ -340,12 +329,13 @@ function drawParticle(px, py, n, qText, qValue, radiusPx, fontPx) {{
   return {{px, py, n, qText}};
 }}
 
-function drawChargeLabelsBelow(particles, yAxis, W, scale) {{
+// Cargas abaixo do eixo
+function drawChargeLabelsBelow(particles) {{
   particles.sort((a,b) => a.px - b.px);
 
-  const baseY = yAxis + Math.round(58*scale);
-  const dy = Math.round(18*scale);
-  const minDx = Math.round(140*scale);
+  const baseY = yAxis + 62;
+  const dy = 16;
+  const minDx = 140;
   const levels = [];
 
   for (let i=0; i<particles.length; i++) {{
@@ -363,7 +353,7 @@ function drawChargeLabelsBelow(particles, yAxis, W, scale) {{
   const qSub = {{1: "q₁", 2:"q₂", 3:"q₃"}};
 
   ctx.fillStyle = "#111";
-  ctx.font = `${{Math.round(14*clamp(scale,0.85,1.15))}}px Arial`;
+  ctx.font = "14px Arial";
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
 
@@ -376,7 +366,7 @@ function drawChargeLabelsBelow(particles, yAxis, W, scale) {{
       ctx.strokeStyle = "#999";
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(p.px, yAxis + Math.round(18*scale));
+      ctx.moveTo(p.px, yAxis + 18);
       ctx.lineTo(p.px, y - 2);
       ctx.stroke();
     }}
@@ -385,111 +375,102 @@ function drawChargeLabelsBelow(particles, yAxis, W, scale) {{
   }}
 }}
 
-function drawAxis(xMin, xMax, W, H, padL, padR, yAxis, scale) {{
-  ctx.strokeStyle = "#111";
+// Seta "de vetor" acima do texto do rótulo
+function drawVectorOverLabel(text, xAnchor, yBaseline, align, color) {{
+  ctx.save();
+  ctx.font = "14px Arial";
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
   ctx.lineWidth = 2;
+
+  const w = ctx.measureText(text).width;
+  let xLeft = xAnchor;
+  if (align === "right") xLeft = xAnchor - w;
+  if (align === "center") xLeft = xAnchor - w/2;
+
+  const yArrow = yBaseline - 16;
   ctx.beginPath();
-  ctx.moveTo(padL, yAxis);
-  ctx.lineTo(W - padR, yAxis);
+  ctx.moveTo(xLeft, yArrow);
+  ctx.lineTo(xLeft + w, yArrow);
   ctx.stroke();
 
-  // ticks adaptativos p/ evitar sobreposição no mobile
-  let step = 1;
-  if (W < 520) step = 3;
-  else if (W < 720) step = 2;
+  ctx.beginPath();
+  ctx.moveTo(xLeft + w, yArrow);
+  ctx.lineTo(xLeft + w - 6, yArrow - 4);
+  ctx.lineTo(xLeft + w - 6, yArrow + 4);
+  ctx.closePath();
+  ctx.fill();
 
-  const fontPx = Math.round(13*clamp(scale, 0.85, 1.2));
-  ctx.fillStyle = "#111";
-  ctx.font = `${{fontPx}}px Arial`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
+  ctx.restore();
+}}
 
-  for (let t = Math.ceil(xMin); t <= Math.floor(xMax); t += step) {{
-    const px = Xmap(t, xMin, xMax, W, padL, padR);
+// Vetor (seta)
+function drawArrow(x0, y0, dx, color, label) {{
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 3;
 
+  if (dx === 0) {{
     ctx.beginPath();
-    ctx.moveTo(px, yAxis - Math.round(7*scale));
-    ctx.lineTo(px, yAxis + Math.round(7*scale));
+    ctx.moveTo(x0 - 8, y0);
+    ctx.lineTo(x0 + 8, y0);
     ctx.stroke();
 
-    ctx.fillText(t.toString().replace(".", ","), px, yAxis + Math.round(10*scale));
+    ctx.font = "14px Arial";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label + " ≈ 0", x0 + 12, y0);
+
+    drawVectorOverLabel(label, x0 + 12, y0, "left", color);
+    return;
   }}
 
-  ctx.textAlign = "right";
+  const x1 = x0 + dx;
+
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y0);
+  ctx.stroke();
+
+  const head = 10;
+  const s = (dx > 0) ? 1 : -1;
+  ctx.beginPath();
+  ctx.moveTo(x1, y0);
+  ctx.lineTo(x1 - s*head, y0 - head*0.6);
+  ctx.lineTo(x1 - s*head, y0 + head*0.6);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.font = "14px Arial";
+  const align = (dx > 0) ? "left" : "right";
+  ctx.textAlign = align;
   ctx.textBaseline = "bottom";
-  ctx.fillText("x (m)", W - padR, yAxis - Math.round(10*scale));
+  const xText = x1 + (dx > 0 ? 6 : -6);
+  const yText = y0 - 6;
+  ctx.fillText(label, xText, yText);
+
+  drawVectorOverLabel(label, xText, yText, align, color);
 }}
 
-function drawAll(W, H, scale) {{
-  ctx.clearRect(0, 0, W, H);
+drawAxis();
 
-  const xMin = data.xMin;
-  const xMax = data.xMax;
+const parts = [];
+parts.push(drawParticle({x1}, 1, "{q1_str}", {q1}));
+parts.push(drawParticle({x2}, 2, "{q2_str}", {q2}));
+parts.push(drawParticle({x3}, 3, "{q3_str}", {q3}));
 
-  const padL = Math.round(50*clamp(scale, 0.85, 1.25));
-  const padR = Math.round(50*clamp(scale, 0.85, 1.25));
+drawChargeLabelsBelow(parts);
 
-  // posição vertical do eixo adaptativa
-  const yAxis = Math.round(clamp(H*0.58, 190, H-130));
-
-  drawAxis(xMin, xMax, W, H, padL, padR, yAxis, scale);
-
-  const radiusPx = Math.round(16*clamp(scale, 0.85, 1.25));
-  const fontPx = Math.round(14*clamp(scale, 0.85, 1.25));
-
-  const parts = [];
-  parts.push(drawParticle(Xmap(data.x1, xMin, xMax, W, padL, padR), yAxis, 1, data.q1_str, data.q1, radiusPx, fontPx));
-  parts.push(drawParticle(Xmap(data.x2, xMin, xMax, W, padL, padR), yAxis, 2, data.q2_str, data.q2, radiusPx, fontPx));
-  parts.push(drawParticle(Xmap(data.x3, xMin, xMax, W, padL, padR), yAxis, 3, data.q3_str, data.q3, radiusPx, fontPx));
-
-  drawChargeLabelsBelow(parts, yAxis, W, clamp(scale, 0.85, 1.25));
-
-  const px3 = Xmap(data.x3, xMin, xMax, W, padL, padR);
-
-  const arrowBase = 120*clamp(scale, 0.85, 1.35);
-  const arrowBaseR = 140*clamp(scale, 0.85, 1.35);
-
-  // y das setas (adaptativo)
-  const y1 = yAxis - Math.round(95*clamp(scale, 0.85, 1.25));
-  const y2 = yAxis - Math.round(65*clamp(scale, 0.85, 1.25));
-  const y3 = yAxis - Math.round(35*clamp(scale, 0.85, 1.25));
-
-  drawArrow(px3, y1, data.d13 * arrowBase * data.a13, "#d62728", "F₁₃", fontPx);
-  drawArrow(px3, y2, data.d23 * arrowBase * data.a23, "#1f77b4", "F₂₃", fontPx);
-  drawArrow(px3, y3, data.dr  * arrowBaseR * data.ar, "#2ca02c", "Fᵣ",  fontPx);
-}}
-
-function resizeAndDraw() {{
-  const wrap = document.getElementById("wrap");
-  const cssW = wrap.clientWidth;
-
-  // altura proporcional + margem p/ rótulos abaixo
-  const scale = cssW / BASE_W;
-  const cssH = Math.round(Math.max(320, BASE_H*scale + 70));
-
-  canvas.style.width = "100%";
-  canvas.style.height = cssH + "px";
-
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.round(cssW * dpr);
-  canvas.height = Math.round(cssH * dpr);
-
-  // desenhar em "px CSS" (coord. naturais)
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  drawAll(cssW, cssH, scale);
-}}
-
-window.addEventListener("resize", resizeAndDraw);
-window.addEventListener("orientationchange", resizeAndDraw);
-setTimeout(resizeAndDraw, 80);
+const px3 = X({x3});
+drawArrow(px3, yAxis - 95, {d13} * {L13:.6f}, "#d62728", "F₁₃");
+drawArrow(px3, yAxis - 65, {d23} * {L23:.6f}, "#1f77b4", "F₂₃");
+drawArrow(px3, yAxis - 35, {dr}  * {Lr:.6f},  "#2ca02c", "Fᵣ");
 </script>
 """
-
-# altura do iframe um pouco maior para evitar “corte” em alguns celulares
-components.html(html, height=560, scrolling=False)
+components.html(html, height=430)
 
 # ===================== Seção Forças =====================
+
 st.header("Forças Eletrostáticas")
 
 st.latex(r"F = K\frac{|q_a q_b|}{r^2}")
@@ -499,6 +480,7 @@ st.markdown(
 )
 
 # ===================== Resultados destacados =====================
+
 st.subheader("Resultados (sentido no eixo x)")
 
 def result_card(title, value, direction, color):
@@ -511,9 +493,9 @@ def result_card(title, value, direction, color):
             border-radius: 14px;
             box-shadow: 0 1px 6px rgba(0,0,0,0.06);
             margin-bottom: 10px;">
-          <div class="result-card-title"><b>{title}</b></div>
-          <div class="result-card-value"><b>{value}</b> <span style="font-size: 22px;">{direction}</span></div>
-          <div class="result-card-foot">
+          <div style="font-size: 14px; color: #333; margin-bottom: 6px;"><b>{title}</b></div>
+          <div style="font-size: 24px; color: #111;"><b>{value}</b> <span style="font-size: 22px;">{direction}</span></div>
+          <div style="font-size: 12px; color: #555; margin-top: 6px;">
             Apenas os <b>resultados finais</b> são exibidos com <b>2 algarismos significativos</b>.
           </div>
         </div>
@@ -521,7 +503,6 @@ def result_card(title, value, direction, color):
         unsafe_allow_html=True
     )
 
-# colunas no desktop, empilha no mobile via CSS acima
 c1, c2, c3 = st.columns(3)
 with c1:
     result_card("Força na partícula 3 devido à partícula 1 (F₁₃)",
@@ -540,6 +521,7 @@ with c3:
                 "#2ca02c")
 
 # ===================== Cálculos =====================
+
 st.subheader("Cálculos")
 
 st.markdown("**Força na partícula 3 devido à partícula 1 (F₁₃)**")
@@ -559,5 +541,3 @@ st.latex(r"\vec{F}_r = \vec{F}_{13} + \vec{F}_{23}")
 
 if equilibrio:
     st.success("✅ A partícula 3 está na **posição de equilíbrio** (Fᵣ = 0, com 2 algarismos significativos).")
-else:
-    st.info("ℹ️ Ajuste posições/cargas para tentar obter **Fᵣ ≈ 0** (com 2 algarismos significativos).")
