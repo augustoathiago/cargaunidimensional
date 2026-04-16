@@ -485,4 +485,4 @@ st.header("Forças Eletrostáticas")
 st.latex(r"F = K\frac{|q_a q_b|}{r^2}")
 st.markdown(
     "onde $q_a$ e $q_b$ são as cargas das partículas interagindo, $r$ é a distância entre elas e "
-    "**K é a constante de Coulomb igual a 9,0×10
+    "*K é a constante de Coulomb igual a 9,0×10
